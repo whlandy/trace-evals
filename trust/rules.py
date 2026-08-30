@@ -133,6 +133,12 @@ def node_findings(node: dict) -> list[dict]:
                 "断言只是「至少有一个可见」",
                 "是真命题，但只能证明这段文字还在，证不了系统做对了什么"))
 
+    if node["observe_status"] != "ready":
+        out.append(_finding(
+            "step_not_ready", OBSERVE, LOUD_LATER, node_id,
+            f"这一步自己标着 status={node['observe_status']!r}",
+            "产出它的编译器就知道这步没弄完；带着它回放，坏在哪儿是碰运气"))
+
     # ── 桌面侧 ──
     # 判据来自 edr-wd 编译期自己标的 issues。它已经知道的事，我们不再推一遍，
     # 只把它翻成同一套失败形态 —— 这样两个 runtime 的问题能放在一张表里比。
@@ -162,7 +168,10 @@ def node_findings(node: dict) -> list[dict]:
     # 只校验、不操作的步骤（actionId 为空）本来就不需要定位控件 —— 它验的是
     # 窗口状态。对它报「没有定位依据」是误报。
     needs_target = node["action"] not in ("DoNothing",)
-    if node["app"] == "desktop" and needs_target \
+    # 「没有选择器」常常是「选择器不唯一」的**后果** —— edr-wd 认出控件不唯一时
+    # 干脆不给选择器（不猜，这是对的）。两条都报等于一个缺陷罚两次，排序会被扭曲。
+    already_explained = "compile_selector_ambiguous" in node["desktop_issues"]
+    if node["app"] == "desktop" and needs_target and not already_explained \
             and not node["desktop_hasSelector"] and not node["observe_templates"]:
         out.append(_finding(
             "no_locator_at_all", REPLAY, SILENT_PASS, node_id,
@@ -204,6 +213,18 @@ def trace_findings(trace: dict) -> dict:
     findings = [f for node in nodes for f in node_findings(node)]
 
     # ── 只有站在整条轨迹的高度才看得见的两条 ──
+
+    # 产物自己都说没准备好，而两个 runtime 对这件事的态度不一样：
+    # 我们的 replay_trace 直接拒跑（"trace 尚未 ready"），maa-fw 的节点模型里
+    # 根本没有 status 这个概念，照跑不误。同一份文件，一边拦一边放 ——
+    # 只看 maa-fw 那边的绿，是不知道自己在跑一条半成品的。
+    if totals["observe_status"] and totals["observe_status"] != "ready":
+        not_ready = sum(1 for n in nodes if n["observe_status"] != "ready")
+        findings.append(_finding(
+            "trace_not_ready", OBSERVE, LOUD_LATER, None,
+            f"轨迹自称 status={totals['observe_status']!r}"
+            f"（{not_ready}/{totals['steps']} 步没弄完）",
+            "我们的回放器会直接拒跑；maa-fw 不认这个字段，会照跑并报成功"))
 
     if totals["evidence_assertions"] == 0:
         findings.append(_finding(

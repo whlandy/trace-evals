@@ -130,3 +130,32 @@ def test_real_desktop_recordings_are_auditable():
         has_verifier = any(s.get("verifiers") for s in source["steps"].values())
         reported_none = "no_assertions" in {f["rule"] for f in result["findings"]}
         assert not (has_verifier and reported_none), case.parent.name
+
+
+def test_ambiguity_and_missing_locator_are_not_double_counted():
+    """edr-wd 认出控件不唯一时干脆不给选择器（不猜，这是对的）。
+    两条规则都报等于一个缺陷罚两次，排序会被扭曲。"""
+    rules = _rules(_desktop(actionId="gui.click", selector=None,
+                            issues=["compile_selector_ambiguous"]))
+    assert "ambiguous_desktop_selector" in rules
+    assert "no_locator_at_all" not in rules
+
+
+def test_incomplete_trace_is_reported():
+    """产物自己都说没准备好时必须说出来。
+
+    两个 runtime 对这件事的态度不一样：我们的 replay_trace 直接拒跑，
+    maa-fw 的节点模型里没有 status 这个概念，照跑不误 —— 只看那边的绿，
+    是不知道自己在跑一条半成品的。
+    """
+    desktop = _desktop(actionId="gui.click", selector=_sel(automationId="Win.btn"),
+                       status="incomplete", issues=["compile_selector_ambiguous"])
+    desktop["status"] = "incomplete"
+    rules = _rules(desktop)
+    assert "trace_not_ready" in rules
+    assert "step_not_ready" in rules
+
+
+def test_ready_trace_is_not_nagged():
+    rules = _rules(_desktop(actionId="gui.click", selector=_sel(automationId="Win.btn")))
+    assert "trace_not_ready" not in rules and "step_not_ready" not in rules

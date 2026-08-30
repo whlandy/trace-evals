@@ -38,8 +38,24 @@ FAILURE_TITLE = {
 }
 
 
+def load_case_trace(case: Path) -> dict:
+    """读这个目录里的轨迹。桌面轨迹当场转成 v2 —— 少一个「记得先导出」的步骤。
+
+    要求人先跑一遍导出器，等于给体检加了一道谁都会忘的前置。而忘了的后果不是
+    报错，是**根本没人体检**。
+    """
+    v2 = case / "trace.json"
+    if v2.exists():
+        return json.loads(v2.read_text(encoding="utf-8"))
+    desktop = case / "golden-trace.json"
+    if desktop.exists():
+        from desktop_to_v2 import convert
+        return convert(json.loads(desktop.read_text(encoding="utf-8")))
+    raise FileNotFoundError(f"{case} 里既没有 trace.json 也没有 golden-trace.json")
+
+
 def audit(case: Path) -> dict:
-    trace = json.loads((case / "trace.json").read_text(encoding="utf-8"))
+    trace = load_case_trace(case)
     result = score_trace(trace)
     raw = case / "recording.json"
     result["crosscheck"] = crosscheck(
