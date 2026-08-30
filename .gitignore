@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+labels.jsonl
+inventory.json
+findings.json
+crosscheck.json
+.auth/
