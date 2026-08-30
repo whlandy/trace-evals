@@ -64,8 +64,12 @@ def _anchors(sel: str) -> list[str]:
 def node_features(node_id: str, node: dict) -> dict[str, Any]:
     """一个节点的事实。字段名以 replay_/evidence_/observe_ 分组。"""
     action = (node.get("action") or {}).get("type")
-    # v2 里断言不产生动作（action 是 DoNothing），规格在 attach.verification
+    # v2 里断言不产生动作（action 是 DoNothing），规格在 attach.verification。
+    # web 侧放 assertion（单条），桌面侧放 verifiers（多条）—— 两边都是「断言」，
+    # 只认一边的话，桌面轨迹明明有 20 条校验也会被报成「0 条断言」。
+    # 误报是可信度工具最不能有的东西：它会让人不再看报告。
     spec = ts.assertion_of(node)
+    verifiers = ts.verification(node).get("verifiers") or []
     sel = _sel(node)
     param = _param(node)
     via = param.get("via") or {}
@@ -78,6 +82,7 @@ def node_features(node_id: str, node: dict) -> dict[str, Any]:
         "action": action,
         "selectorKind": ts.selector_of(node).get("kind"),
         "selectorSel": sel,
+        "app": ts.attach(node).get("app"),
 
         # ── 可回放性 ──
         "replay_positionalSelector": bool(POSITIONAL.search(sel)),
@@ -95,13 +100,24 @@ def node_features(node_id: str, node: dict) -> dict[str, Any]:
         "replay_runtimeInput": bool(param.get("valueFrom")),
 
         # ── 证据力 ──
-        "evidence_isAssert": bool(spec),
+        "evidence_isAssert": bool(spec) or bool(verifiers),
+        "evidence_verifiers": [v.get("type") for v in verifiers],
+        # 这条校验换个 runtime 还成不成立。标了 scope 的意思是「只有产出它的
+        # 那一侧验得了」—— 在另一侧跑，这条检查根本不会发生。
+        "evidence_verifyScope": ts.verification(node).get("scope"),
         "evidence_requiredResponses": len(required),
         "evidence_responsesWithBody": sum(
             1 for r in required if r.get("expectedBody") is not None),
 
         # ── 观测充分性 ──
         "observe_templates": sorted(ts.templates_of(node)),
+        # ── 桌面侧的事实 ──
+        # edr-wd 在编译期就标了问题（选择器撞车、动作没人校验）。它已经知道的
+        # 事，我们没理由再推一遍 —— 直接读，并翻成同一套失败形态。
+        "desktop_issues": list(ts.provenance(node).get("issues") or []),
+        "desktop_unmappedAction": (
+            (node.get("action") or {}).get("param") or {}).get("unmappedAction"),
+        "desktop_hasSelector": bool(ts.selector_of(node).get("sel")),
         "observe_status": ts.node_status(node),
     }
 

@@ -133,14 +133,60 @@ def node_findings(node: dict) -> list[dict]:
                 "断言只是「至少有一个可见」",
                 "是真命题，但只能证明这段文字还在，证不了系统做对了什么"))
 
+    # ── 桌面侧 ──
+    # 判据来自 edr-wd 编译期自己标的 issues。它已经知道的事，我们不再推一遍，
+    # 只把它翻成同一套失败形态 —— 这样两个 runtime 的问题能放在一张表里比。
+    if node["desktop_unmappedAction"]:
+        out.append(_finding(
+            "unmapped_action", REPLAY, SILENT_PASS, node_id,
+            f"动作 {node['desktop_unmappedAction']!r} 没有映射，编译成了 DoNothing",
+            "回放会跳过这一步却仍按成功计分 —— 少做一步也报绿"))
+
+    for issue in node["desktop_issues"]:
+        if issue == "compile_selector_ambiguous":
+            out.append(_finding(
+                "ambiguous_desktop_selector", REPLAY, SILENT_PASS, node_id,
+                "录制器标了 compile_selector_ambiguous（控件不唯一）",
+                "回放可能点到另一个长得一样的控件，而且不报错"))
+        elif issue.endswith("_verifier_required"):
+            out.append(_finding(
+                "action_without_verifier", EVIDENCE, WEAK, node_id,
+                f"录制器标了 {issue}（这个动作没人校验它落在哪）",
+                "滚动/拖拽做完了没有任何检查，这一步绿了说明不了什么"))
+        else:
+            out.append(_finding(
+                "compiler_flagged_issue", OBSERVE, LOUD_LATER, node_id,
+                f"录制器标了 {issue}",
+                "编译期就知道这一步有问题，回放前该先看它"))
+
+    # 只校验、不操作的步骤（actionId 为空）本来就不需要定位控件 —— 它验的是
+    # 窗口状态。对它报「没有定位依据」是误报。
+    needs_target = node["action"] not in ("DoNothing",)
+    if node["app"] == "desktop" and needs_target \
+            and not node["desktop_hasSelector"] and not node["observe_templates"]:
+        out.append(_finding(
+            "no_locator_at_all", REPLAY, SILENT_PASS, node_id,
+            "既没有控件选择器，也没有视觉模板",
+            "回放没有任何依据定位目标，点了等于随机点 —— 而且不报错"))
+
+    if node["evidence_isAssert"] and node["evidence_verifyScope"]:
+        out.append(_finding(
+            "verification_not_portable", EVIDENCE, WEAK, node_id,
+            f"这条校验标了 {node['evidence_verifyScope']}",
+            "换一个 runtime 跑，这条检查根本不会发生 —— 那一步会「通过」，"
+            "但什么都没验"))
+
     if node["evidence_requiredResponses"] and not node["evidence_responsesWithBody"]:
         out.append(_finding(
             "response_without_body", EVIDENCE, WEAK, node_id,
             f"{node['evidence_requiredResponses']} 个必发请求只校验状态码",
             "接口返回 200 但内容是错的，这一步照样通过"))
 
+    # 没有模板在 web 上是缺回退；桌面上只要有 automationId 就定位得了，
+    # 那种情形归 no_locator_at_all 管，不该在这里重复报一次。
     if node["action"] in ("Click", "DoubleClick", "SetSwitch", "Check", "Uncheck") \
-            and not node["observe_templates"]:
+            and not node["observe_templates"] \
+            and not (node["app"] == "desktop" and node["desktop_hasSelector"]):
         out.append(_finding(
             "no_template", OBSERVE, LOUD_LATER, node_id,
             "定位类步骤没有视觉模板",
