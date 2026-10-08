@@ -1,14 +1,34 @@
-# maa-trace-eval
+# trace-evals
 
-评估 [edr-cloud-recorder](../edr-cloud-recorder) 产出的 maa 轨迹**值不值得信**。
+统一处理两个彼此独立、但经常被混为一谈的问题：
+
+1. [edr-cloud-recorder](../edr-cloud-recorder) 产出的 golden 轨迹**值不值得信**；
+2. maa-fw 的某一次执行是否完整、准确地遵循了这条 golden 轨迹。
+
+它们必须分别报告：一次回放满分，不代表作为参照物的 golden 轨迹有足够证据力。
+
+## Golden 轨迹可信度体检
 
 ```bash
 python3 trust/audit.py <轨迹目录>
 ```
 
-## 它回答的是另一个问题
+## Maa 执行结果评分
 
-录制器自带的 `evaluate_trace` 评的是「**这一次回放**跑得怎么样」。
+```bash
+python3 -m trust.maa_execution \
+  --golden /path/to/maa-trace.json \
+  --execution /path/to/maa-execution.json \
+  --output /path/to/maa-evaluation.json
+```
+
+这个评分器校验 golden digest、节点集合与顺序，并输出完成率、动作准确率、轨迹
+顺序、重试效率和视觉匹配置信度。它只回答“这一次是否按编码好的路径执行”，不把
+高分解释为业务结果正确。
+
+## 为什么两种结果必须分开看
+
+Maa execution evaluator 评的是「**这一次回放**跑得怎么样」。
 它答不了「该不该信这条轨迹」—— 实测语料里最好的那条：
 
     ══ maa-flow6 ══  9 步 · 分数 50（罚分 50）
@@ -52,6 +72,7 @@ trust/mutate.py      10 种缺陷注入器，给评估器造负样本
 trust/replay_lab.py  重复回放取真值标签
 trust/validate.py    meta-eval：评估这个评估器
 trust/audit.py       一条命令的体检报告
+trust/maa_execution.py  Maa 单次执行的确定性评分
 ```
 
 ## 三项可证伪的检查
@@ -78,3 +99,6 @@ python3 trust/validate.py <轨迹目录>...
     pip install playwright opencv-python   # replay_lab 取标签时才需要
 
 进度和每一轮的结论见 [trust/STATUS.md](trust/STATUS.md)，方案见 [PLAN.md](PLAN.md)。
+
+下一阶段的实验平台迁移、Golden 回放、业务 Oracle、逐轮代码目标和验收标准见
+[Trace Evals 实验架构迁移设计](docs/EVAL_PLATFORM_MIGRATION_DESIGN.md)。

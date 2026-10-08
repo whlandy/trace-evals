@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trace Evals"
+  short_description: "Audit trace trust and score Maa replay outcomes"
+  default_prompt: "Use $trace-evals to audit this golden trace and evaluate its Maa replay evidence."
