@@ -1,0 +1,4 @@
+# Phoenix 是可选的可视化/实验层；核心 trust 评分不依赖它。
+arize-phoenix-client>=2.0,<4
+arize-phoenix-otel>=0.16,<1
+pandas>=2,<3
