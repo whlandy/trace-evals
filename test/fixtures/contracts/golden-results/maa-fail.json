@@ -1,0 +1,1 @@
+{"actionAccuracy":1.0,"averageVisualMatchScore":0.91,"duplicateNodeIds":[],"expectedStepCount":2,"extraActionCount":0,"failedNodeIds":["step_0002"],"observedStepCount":2,"retryCount":0,"schema":"edr.maa-trace-evaluation/v1","score":39.55,"stepCompletionRate":0.5,"taskSuccess":false,"traceIntegrity":true,"trajectoryEfficiency":1.0,"trajectoryOrderRate":1.0}
