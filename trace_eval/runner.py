@@ -34,6 +34,8 @@ from trace_eval.adapters import (
 from trace_eval.artifacts import dataset_digest
 from trace_eval.contracts import ArtifactRef, EvalRun
 from trace_eval.datasets import DatasetError, load_dataset, validate_dataset
+from trace_eval.aggregation import stability_label, stability_layer
+from trace_eval.state_policies import policy_for, write_keys_of
 from trace_eval.evaluators.oracles import evaluate_oracles
 from trace_eval.artifacts import file_digest
 from trace_eval.storage import ExperimentStore
@@ -53,6 +55,7 @@ class RunConfig:
     variant_id: str = "v1"
     dry_run: bool = False
     timeout: float = 30.0
+    trials: int = 1
 
 
 @dataclass
@@ -71,6 +74,7 @@ class ExperimentSummary:
     dry_run_plan: list | None = None
     run_dirs: list = field(default_factory=list)
     statuses: dict = field(default_factory=dict)  # runId -> status
+    stability: dict = field(default_factory=dict)  # caseId -> {"label","verdict"}
 
 
 def repo_git_sha(repo_root: Path | None = None) -> str | None:
@@ -92,6 +96,29 @@ def _load_validated_snapshot(snapshot_dir: Path):
             "Experiment 只接受通过验证的 Dataset snapshot："
             + "；".join(problems))
     return dataset
+
+
+class WriteLockError(RuntimeError):
+    """同一写目标上已有 Case 持锁 —— 未声明隔离的写 Case 不并发。"""
+
+
+class WriteLockRegistry:
+    """写目标资源锁：对同一目标写操作的 Case 串行化（持锁期间再抢即报错）。"""
+
+    def __init__(self):
+        self._held: dict[str, str] = {}
+
+    def acquire(self, keys: list[str], case_id: str) -> None:
+        for key in keys:
+            if key in self._held:
+                raise WriteLockError(
+                    f"写目标 {key!r} 已被 {self._held[key]!r} 持有，"
+                    f"{case_id!r} 必须等待（未声明隔离的写不并发）")
+            self._held[key] = case_id
+
+    def release(self, keys: list[str]) -> None:
+        for key in keys:
+            self._held.pop(key, None)
 
 
 def _execute_adapter(adapter: ReplayAdapter, prepared,
@@ -144,9 +171,10 @@ def _materialize_artifacts(run_dir: Path, prepared,
 
 def run_case(config: RunConfig, case, adapter: ReplayAdapter,
              handle, store: ExperimentStore,
-             dataset_digest_value: str) -> Path:
+             dataset_digest_value: str,
+             trial: int = 1, policy=None) -> Path:
     variant = VariantSpec(id=config.variant_id)
-    run_id = store.new_run_id(case.id, config.variant_id, trial=1)
+    run_id = store.new_run_id(case.id, config.variant_id, trial=trial)
     run_dir = store.run_dir(handle, run_id)
     workspace = run_dir / "workspace"
 
@@ -161,6 +189,7 @@ def run_case(config: RunConfig, case, adapter: ReplayAdapter,
     artifact_refs: list[ArtifactRef] = []
     prepared = None
     outcome = None
+    state_record = None
     oracle_results: list = []
     cleanup_record: dict = {"ok": True, "errors": []}
 
@@ -187,11 +216,20 @@ def run_case(config: RunConfig, case, adapter: ReplayAdapter,
                 artifact_refs = _materialize_artifacts(
                     run_dir, prepared, adapter.collect(prepared))
                 _stage_all_inputs(case_abs, run_dir)
+                if policy is not None:
+                    state_record = policy.prepare(case_abs, trial, run_dir)
                 if case_abs.oracles:
                     oracle_results = evaluate_oracles(case_abs, run_dir)
+                oracle_results += _c2_results(case_abs, run_dir)
             else:
                 # 完整性被拒（如 Execution 与 Golden 不一致）：不是业务失败
                 status, note = "invalid", outcome.notes
+
+    state_after: dict = {}
+    if policy is not None and pre.ok:
+        record = policy.after_trial(
+            case_abs, trial, success=(status == "completed"), run_dir=run_dir)
+        state_after = record.after
 
     # cleanup：成功、业务失败、异常、取消后都执行；失败单独记录
     if prepared is not None:
@@ -206,26 +244,70 @@ def run_case(config: RunConfig, case, adapter: ReplayAdapter,
         "gitSha": repo_git_sha(),
         "datasetDigest": dataset_digest_value,
         "variantId": config.variant_id,
-        "trial": 1,
+        "trial": trial,
         "adapter": adapter.name,
         "timeout": config.timeout,
+        "statePolicy": policy.name if policy is not None else None,
         "startedAt": _ts(),
     }
+    extra = {"note": note, "cleanup": cleanup_record}
+    if policy is not None and state_after:
+        extra["stateAfter"] = state_after
+    if policy is not None and pre.ok and state_record is not None:
+        extra["initialStateSummary"] = {
+            "digest": state_record.initial_digest,
+            "state": state_record.initial_state,
+        }
     run = EvalRun(
         run_id=run_id,
         experiment_id=config.experiment_id,
         case_id=case.id,
         variant_id=config.variant_id,
-        trial=1,
+        trial=trial,
         status=status,
         started_at=environment["startedAt"],
         finished_at=_ts(),
         artifacts=_artifact_map(run_dir),
         environment=environment,
-        extra={"note": note, "cleanup": cleanup_record},
+        extra=extra,
     )
     store.commit_run(run_dir, run, results=oracle_results)
     return run_dir
+
+
+def _c2_results(case_abs, run_dir: Path) -> list:
+    """C2 执行一致性结果随 Run 定稿（Maa：确定性 evaluator 读 Run 内 Artifact，
+    evaluator 只读、不产生副作用）。"""
+    if case_abs.executor != "maa":
+        return []
+    golden = run_dir / "artifacts" / "golden.json"
+    execution = run_dir / "artifacts" / "execution.json"
+    if not (golden.is_file() and execution.is_file()):
+        return []
+    from trace_eval.evaluators.execution import MaaExecutionEvaluator
+    g = json.loads(golden.read_text(encoding="utf-8"))
+    e = json.loads(execution.read_text(encoding="utf-8"))
+    return MaaExecutionEvaluator().evaluate(g, e)
+
+
+def _trial_verdict(run_dir: Path, store: ExperimentStore) -> dict:
+    """一个 trial → 稳定性标签输入（与 replay_lab 的 run 记录同形）。
+
+    invalid / infra_error / cancelled 的 trial 记 invalid：环境失效不是
+    业务失败，当红标签就是在伪造真值（同 replay_lab 对认证失效的处理）。
+    """
+    run = store.load_run(run_dir)
+    if run.status in ("invalid", "infra_error", "cancelled"):
+        return {"taskSuccess": False, "score": 0, "invalid": True}
+    results = store.load_results(run_dir)
+    business_fail = any(r.verdict == "fail" for r in results)
+    ok = run.status == "completed" and not business_fail
+    score = 0
+    for r in results:
+        if r.key.startswith("execution.") and isinstance(r.score, (int, float)):
+            score = r.score
+            break
+    return {"taskSuccess": ok, "score": score, "invalid": False}
 
 
 def _stage_all_inputs(case_abs, run_dir: Path) -> None:
@@ -273,15 +355,48 @@ def run_experiment(config: RunConfig) -> ExperimentSummary:
         "schema": SCHEMA_EXPERIMENT_CONFIG,
         "variantId": config.variant_id,
         "timeout": config.timeout,
+        "trials": config.trials,
         "snapshotId": dataset.id,
     })
     summary = ExperimentSummary(config.experiment_id, handle.experiment_dir)
-    for case in dataset.cases:
-        run_dir = run_case(config, case, adapter_for(case), handle, store,
-                           digest_value)
-        summary.run_dirs.append(run_dir)
-        summary.statuses[run_dir.name] = _status_of(run_dir, store)
+    locks = WriteLockRegistry()
+    # 确定性执行顺序：Case 按 ID 排序（同一 snapshot 必得同一调度）
+    for case in sorted(dataset.cases, key=lambda c: c.id):
+        adapter = adapter_for(case)
+        write_keys = write_keys_of(case)
+        locks.acquire(write_keys, case.id)  # 未声明隔离的写不并发
+        policy = policy_for(case, handle.experiment_dir)
+        trial_dirs = []
+        for trial in range(1, config.trials + 1):
+            run_dir = run_case(config, case, adapter, handle, store,
+                                digest_value, trial=trial, policy=policy)
+            trial_dirs.append(run_dir)
+            summary.run_dirs.append(run_dir)
+            summary.statuses[run_dir.name] = _status_of(run_dir, store)
+        locks.release(write_keys)
+        # 稳定性：Case 的标签来自统一 Experiment（退出条件：不是独立脚本）
+        verdicts = [_trial_verdict(d, store) for d in trial_dirs]
+        label = stability_label(verdicts)
+        layer = stability_layer(case.id, label, verdicts)
+        summary.stability[case.id] = {
+            "label": label,
+            "verdict": layer.verdict,
+            "trials": verdicts,
+            "policy": policy.name,
+        }
+    _write_stability(handle.experiment_dir, summary.stability)
     return summary
+
+
+def _write_stability(experiment_dir: Path, stability: dict) -> None:
+    """每 Case 的稳定性标签随 Experiment 落盘（stability.jsonl）。"""
+    import json as _json
+    lines = []
+    for case_id in sorted(stability):
+        record = dict(stability[case_id], caseId=case_id)
+        lines.append(_json.dumps(record, ensure_ascii=False, sort_keys=True))
+    (Path(experiment_dir) / "stability.jsonl").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _status_of(run_dir: Path, store: ExperimentStore) -> str:
@@ -307,6 +422,7 @@ def main(argv: list[str] | None = None) -> int:
                       help="Run 存储根目录（默认 <snapshot>/.experiments）")
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--timeout", type=float, default=30.0)
+    p_run.add_argument("--trials", type=int, default=1)
     args = parser.parse_args(argv)
 
     if args.command != "run":
@@ -320,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
             store_root=args.store or snapshot / ".experiments",
             dry_run=args.dry_run,
             timeout=args.timeout,
+            trials=args.trials,
         )
         summary = run_experiment(config)
     except (RunnerError, DatasetError) as error:
