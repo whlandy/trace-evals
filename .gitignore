@@ -5,3 +5,4 @@ inventory.json
 findings.json
 crosscheck.json
 .auth/
+.snapshots/

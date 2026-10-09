@@ -131,8 +131,13 @@ class EvalCase:
         return out
 
     @classmethod
-    def from_dict(cls, value: dict) -> "EvalCase":
-        _check_schema(value, SCHEMA_CASE, "EvalCase")
+    def from_dict(cls, value: dict, *, require_schema: bool = True) -> "EvalCase":
+        # 嵌套在版本化 Dataset 里的 Case 继承 Dataset 的主版本，可省略自身 schema；
+        # 但只要写了 schema，就必须精确匹配（未知主版本照样拒绝）。
+        if "schema" in value:
+            _check_schema(value, SCHEMA_CASE, "EvalCase")
+        elif require_schema:
+            raise ContractError(f"EvalCase: 缺少 schema（期望 {SCHEMA_CASE!r}）")
         kwargs = _extract(value, CASE_FIELDS, "EvalCase",
                           required={"id", "input", "executor"}, default=None)
         case = cls(
@@ -336,8 +341,8 @@ def _evaluator_block(value: Any, what: str) -> dict:
 
 # ── 模块级解析入口（后续 Runner 只走这里，不碰各 evaluator 私有结构）──
 
-def parse_eval_case(value: dict) -> EvalCase:
-    return EvalCase.from_dict(value)
+def parse_eval_case(value: dict, *, require_schema: bool = True) -> EvalCase:
+    return EvalCase.from_dict(value, require_schema=require_schema)
 
 
 def parse_eval_run(value: dict) -> EvalRun:

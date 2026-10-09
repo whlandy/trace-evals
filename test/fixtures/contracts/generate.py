@@ -155,6 +155,40 @@ def main() -> int:
     except EvaluationError as error:
         _write(results / "maa-incomplete-golden.err", str(error))
 
+    # ── 公开 smoke Dataset（Round 2）────────────────────────────────
+    import shutil
+    from trace_eval.datasets import SCHEMA_DATASET, build_manifest
+    ds = HERE / "dataset"
+    if ds.exists():
+        shutil.rmtree(ds)
+    (ds / "case-a").mkdir(parents=True)
+    (ds / "case-b").mkdir(parents=True)
+    _write(ds / "case-a" / "golden.json",
+           json.loads((maa_dir / "golden.json").read_text(encoding="utf-8")))
+    _write(ds / "case-a" / "recording.json", {"steps": []})
+    _write(ds / "case-b" / "recording.json",
+           {"steps": [{"id": "web-step-1", "type": "click"}]})
+    _write(ds / "dataset.json", {
+        "schema": SCHEMA_DATASET,
+        "id": "contracts-smoke",
+        "version": "2026.10",
+        "cases": [
+            {"id": "case-a", "executor": "maa",
+             "input": {"golden": "case-a/golden.json",
+                       "recording": "case-a/recording.json"},
+             "tags": ["contract"]},
+            {"id": "case-b", "executor": "web",
+             "input": {"recording": "case-b/recording.json"},
+             "environment": {"profile": "local-dev",
+                             "statePolicy": {"reset": "per-trial",
+                                              "cleanup": "restore-default"},
+                             "sideEffects": ["write:policy"]},
+             "tags": ["contract", "write"]},
+        ],
+        "metadata": {"note": "公开 smoke dataset：全合成数据，无敏感内容"},
+    })
+    build_manifest(ds)
+
     # ── BASELINE ─────────────────────────────────────────────────────
     import subprocess
     recorder_sha = subprocess.run(

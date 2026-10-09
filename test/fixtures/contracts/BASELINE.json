@@ -1,1 +1,1 @@
-{"date":"2026-10-09T02:57:09Z","note":"288 = 建立基线时全量测试数（不含本契约基线新增的测试）","recorderSha":"c8e5ae64f790b41658abf758cc61777d79cd7f11","schema":"trace-eval.baseline/v1","tests":288,"traceEvalSha":"5f80af810a960d8b3bb750081ae2d68469ffdcb0"}
+{"date":"2026-10-09T03:20:03Z","note":"288 = 建立基线时全量测试数（不含本契约基线新增的测试）","recorderSha":"c8e5ae64f790b41658abf758cc61777d79cd7f11","schema":"trace-eval.baseline/v1","tests":288,"traceEvalSha":"a544354734a5275be2983f695a6d10273aa0e393"}
