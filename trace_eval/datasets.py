@@ -124,8 +124,9 @@ def _resolve(dataset_dir: Path, rel: str) -> Path:
     return target
 
 
-# Case 输入中可引用的 Artifact 键（Round 3 起：回放需要 execution / trace）
-INPUT_KEYS = ("recording", "golden", "execution", "trace")
+# Case 输入中可引用的 Artifact 键（Round 3 起：回放需要 execution / trace；
+# Round 4 起：Oracle 证据走 evidence 键）
+INPUT_KEYS = ("recording", "golden", "execution", "trace", "evidence")
 
 
 def referenced_artifacts(cases: list) -> list[tuple[str, str]]:

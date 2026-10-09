@@ -34,6 +34,8 @@ from trace_eval.adapters import (
 from trace_eval.artifacts import dataset_digest
 from trace_eval.contracts import ArtifactRef, EvalRun
 from trace_eval.datasets import DatasetError, load_dataset, validate_dataset
+from trace_eval.evaluators.oracles import evaluate_oracles
+from trace_eval.artifacts import file_digest
 from trace_eval.storage import ExperimentStore
 
 SCHEMA_EXPERIMENT_CONFIG = "trace-evals.experiment-config/v1"
@@ -159,6 +161,7 @@ def run_case(config: RunConfig, case, adapter: ReplayAdapter,
     artifact_refs: list[ArtifactRef] = []
     prepared = None
     outcome = None
+    oracle_results: list = []
     cleanup_record: dict = {"ok": True, "errors": []}
 
     pre = adapter.preflight(case_abs, variant)
@@ -183,6 +186,9 @@ def run_case(config: RunConfig, case, adapter: ReplayAdapter,
                 status, note = "completed", outcome.notes
                 artifact_refs = _materialize_artifacts(
                     run_dir, prepared, adapter.collect(prepared))
+                _stage_all_inputs(case_abs, run_dir)
+                if case_abs.oracles:
+                    oracle_results = evaluate_oracles(case_abs, run_dir)
             else:
                 # 完整性被拒（如 Execution 与 Golden 不一致）：不是业务失败
                 status, note = "invalid", outcome.notes
@@ -214,13 +220,36 @@ def run_case(config: RunConfig, case, adapter: ReplayAdapter,
         status=status,
         started_at=environment["startedAt"],
         finished_at=_ts(),
-        artifacts={ref.path: {"path": ref.path, "digest": ref.digest}
-                   for ref in artifact_refs},
+        artifacts=_artifact_map(run_dir),
         environment=environment,
         extra={"note": note, "cleanup": cleanup_record},
     )
-    store.commit_run(run_dir, run, results=[])
+    store.commit_run(run_dir, run, results=oracle_results)
     return run_dir
+
+
+def _stage_all_inputs(case_abs, run_dir: Path) -> None:
+    """把 Case 声明的全部输入 Artifact 复制进 run_dir/artifacts/（含 Oracle 证据），
+    保证 Run 自包含、Oracle 只读 run 目录内的已录制证据。"""
+    art_dir = run_dir / "artifacts"
+    for _key, source in (case_abs.input or {}).items():
+        source = Path(source)
+        if not source.is_file():
+            continue
+        art_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, art_dir / source.name)
+
+
+def _artifact_map(run_dir: Path) -> dict:
+    """Run 内全部 Artifact 的 {相对路径: {path, digest}}（从 ID 定位全部）。"""
+    art_dir = Path(run_dir) / "artifacts"
+    out = {}
+    if art_dir.exists():
+        for f in sorted(art_dir.iterdir()):
+            if f.is_file():
+                rel = f"artifacts/{f.name}"
+                out[rel] = {"path": rel, "digest": file_digest(f)}
+    return out
 
 
 def run_experiment(config: RunConfig) -> ExperimentSummary:
