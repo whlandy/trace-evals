@@ -1,0 +1,27 @@
+{
+  "config": {
+    "cases": [
+      {
+        "executor": "web",
+        "id": "case-a",
+        "risk": "high",
+        "tags": [
+          "contract"
+        ]
+      },
+      {
+        "executor": "maa",
+        "id": "case-e",
+        "risk": "high",
+        "tags": [
+          "write"
+        ]
+      }
+    ],
+    "trials": 1
+  },
+  "datasetDigest": "sha256:other-dataset-d2",
+  "id": "experiment-other",
+  "schema": "trace-evals.experiment/v1",
+  "startedAt": "2026-10-09T00:00:00Z"
+}

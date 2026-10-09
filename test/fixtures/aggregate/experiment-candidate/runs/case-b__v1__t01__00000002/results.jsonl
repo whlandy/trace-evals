@@ -1,0 +1,1 @@
+{"calibration": "deterministic", "comment": null, "evaluator": {"name": "fixture-evaluator", "version": "1.0"}, "evidence": null, "expected": null, "failureCode": null, "key": "execution.maa.task", "nodeId": null, "observed": null, "schema": "trace-evals.result/v1", "scope": "case", "score": 80, "verdict": "pass"}

@@ -34,6 +34,7 @@ from trace_eval.adapters import (
 from trace_eval.artifacts import dataset_digest
 from trace_eval.contracts import ArtifactRef, EvalRun
 from trace_eval.datasets import DatasetError, load_dataset, validate_dataset
+from trace_eval.aggregate import trial_verdict
 from trace_eval.aggregation import stability_label, stability_layer
 from trace_eval.state_policies import policy_for, write_keys_of
 from trace_eval.evaluators.oracles import evaluate_oracles
@@ -291,23 +292,8 @@ def _c2_results(case_abs, run_dir: Path) -> list:
 
 
 def _trial_verdict(run_dir: Path, store: ExperimentStore) -> dict:
-    """一个 trial → 稳定性标签输入（与 replay_lab 的 run 记录同形）。
-
-    invalid / infra_error / cancelled 的 trial 记 invalid：环境失效不是
-    业务失败，当红标签就是在伪造真值（同 replay_lab 对认证失效的处理）。
-    """
-    run = store.load_run(run_dir)
-    if run.status in ("invalid", "infra_error", "cancelled"):
-        return {"taskSuccess": False, "score": 0, "invalid": True}
-    results = store.load_results(run_dir)
-    business_fail = any(r.verdict == "fail" for r in results)
-    ok = run.status == "completed" and not business_fail
-    score = 0
-    for r in results:
-        if r.key.startswith("execution.") and isinstance(r.score, (int, float)):
-            score = r.score
-            break
-    return {"taskSuccess": ok, "score": score, "invalid": False}
+    """一个 trial → 稳定性标签输入（与 aggregate.trial_verdict 同一实现）。"""
+    return trial_verdict(store.load_run(run_dir), store.load_results(run_dir))
 
 
 def _stage_all_inputs(case_abs, run_dir: Path) -> None:
@@ -357,6 +343,13 @@ def run_experiment(config: RunConfig) -> ExperimentSummary:
         "timeout": config.timeout,
         "trials": config.trials,
         "snapshotId": dataset.id,
+        # Round 6：Case 声明随 Experiment 落盘（聚合切片的 tag/risk 来源）
+        "cases": [{
+            "id": c.id,
+            "executor": c.executor,
+            "tags": list(c.tags or []),
+            "risk": (c.metadata or {}).get("risk"),
+        } for c in dataset.cases],
     })
     summary = ExperimentSummary(config.experiment_id, handle.experiment_dir)
     locks = WriteLockRegistry()

@@ -1,0 +1,42 @@
+{
+  "config": {
+    "cases": [
+      {
+        "executor": "web",
+        "id": "case-a",
+        "risk": "high",
+        "tags": [
+          "contract"
+        ]
+      },
+      {
+        "executor": "maa",
+        "id": "case-b",
+        "risk": "high",
+        "tags": [
+          "write"
+        ]
+      },
+      {
+        "executor": "web",
+        "id": "case-c",
+        "risk": null,
+        "tags": [
+          "contract",
+          "ui"
+        ]
+      },
+      {
+        "executor": "web",
+        "id": "case-d",
+        "risk": "low",
+        "tags": []
+      }
+    ],
+    "trials": 2
+  },
+  "datasetDigest": "sha256:baseline-dataset-d1",
+  "id": "experiment-candidate",
+  "schema": "trace-evals.experiment/v1",
+  "startedAt": "2026-10-09T00:00:00Z"
+}
