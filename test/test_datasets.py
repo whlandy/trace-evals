@@ -56,7 +56,8 @@ def test_smoke_dataset_loads_and_validates():
 def test_smoke_dataset_has_registered_manifest():
     entries = {entry["path"]: entry for entry in artifacts.read_manifest(FIXTURE)}
     assert set(entries) == {
-        "case-a/golden.json", "case-a/recording.json", "case-b/recording.json"}
+        "case-a/golden.json", "case-a/recording.json", "case-a/execution.json",
+        "case-b/recording.json", "case-b/trace.json"}
     assert all(e["digest"].startswith("sha256:") for e in entries.values())
 
 

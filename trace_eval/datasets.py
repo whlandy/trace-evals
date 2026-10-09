@@ -124,11 +124,15 @@ def _resolve(dataset_dir: Path, rel: str) -> Path:
     return target
 
 
+# Case 输入中可引用的 Artifact 键（Round 3 起：回放需要 execution / trace）
+INPUT_KEYS = ("recording", "golden", "execution", "trace")
+
+
 def referenced_artifacts(cases: list) -> list[tuple[str, str]]:
-    """(case_id, 相对路径) 对，按 Case 的 input.recording / input.golden。"""
+    """(case_id, 相对路径) 对，按 Case 的 input.recording / golden / execution / trace。"""
     refs = []
     for case in cases:
-        for key in ("recording", "golden"):
+        for key in INPUT_KEYS:
             rel = (case.input or {}).get(key)
             if rel:
                 refs.append((case.id, rel))

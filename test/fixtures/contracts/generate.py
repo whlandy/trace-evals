@@ -166,8 +166,23 @@ def main() -> int:
     _write(ds / "case-a" / "golden.json",
            json.loads((maa_dir / "golden.json").read_text(encoding="utf-8")))
     _write(ds / "case-a" / "recording.json", {"steps": []})
+    _write(ds / "case-a" / "execution.json",
+           json.loads((maa_dir / "execution-success.json").read_text(encoding="utf-8")))
     _write(ds / "case-b" / "recording.json",
-           {"steps": [{"id": "web-step-1", "type": "click"}]})
+           {"steps": [
+               {"id": "web-node-1", "action": "type", "ts": 1000},
+               {"id": "web-node-2", "action": "click", "ts": 2000}]})
+    _write(ds / "case-b" / "trace.json", {
+        "$meta": {"attach": {"schema": "edr.success-trace/v2",
+                              "status": "ready",
+                              "nodeOrder": ["web-node-1", "web-node-2"]}},
+        "nodes": [
+            {"id": "web-node-1", "action": {"type": "InputText"},
+             "selector": {"kind": "scoped"}},
+            {"id": "web-node-2", "action": {"type": "Click"},
+             "selector": {"kind": "scoped"}},
+        ],
+    })
     _write(ds / "dataset.json", {
         "schema": SCHEMA_DATASET,
         "id": "contracts-smoke",
@@ -175,10 +190,12 @@ def main() -> int:
         "cases": [
             {"id": "case-a", "executor": "maa",
              "input": {"golden": "case-a/golden.json",
-                       "recording": "case-a/recording.json"},
+                       "recording": "case-a/recording.json",
+                       "execution": "case-a/execution.json"},
              "tags": ["contract"]},
             {"id": "case-b", "executor": "web",
-             "input": {"recording": "case-b/recording.json"},
+             "input": {"trace": "case-b/trace.json",
+                       "recording": "case-b/recording.json"},
              "environment": {"profile": "local-dev",
                              "statePolicy": {"reset": "per-trial",
                                               "cleanup": "restore-default"},

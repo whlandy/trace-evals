@@ -1,0 +1,1 @@
+{"$meta":{"attach":{"nodeOrder":["web-node-1","web-node-2"],"schema":"edr.success-trace/v2","status":"ready"}},"nodes":[{"action":{"type":"InputText"},"id":"web-node-1","selector":{"kind":"scoped"}},{"action":{"type":"Click"},"id":"web-node-2","selector":{"kind":"scoped"}}]}

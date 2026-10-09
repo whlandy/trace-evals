@@ -1,1 +1,1 @@
-{"steps":[{"id":"web-step-1","type":"click"}]}
+{"steps":[{"action":"type","id":"web-node-1","ts":1000},{"action":"click","id":"web-node-2","ts":2000}]}

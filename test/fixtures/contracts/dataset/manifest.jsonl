@@ -1,3 +1,5 @@
+{"digest":"sha256:58128720a4bcde7ee17499e5942c982486bb79e6a644f9d99ab0c41670f756c6","path":"case-a/execution.json","size":390}
 {"digest":"sha256:69ce0b7f744c659ab55ca5f10666ca2421f1aae740b9020333b4f4f7431b059e","path":"case-a/golden.json","size":549}
 {"digest":"sha256:4dfdf4c2e8f3f3c86a3ca3c75648d3ce52c2f43b9cda2a72ff2fc563c3825886","path":"case-a/recording.json","size":13}
-{"digest":"sha256:01401a293c3372fe7e742470314f576415aa103e6357053b3ce303dda2d7ec62","path":"case-b/recording.json","size":47}
+{"digest":"sha256:2d6c67d4cc1786f1d5a2d02e93fcc1617e1ff02a8e2ef0679acdcfdd634b5ca2","path":"case-b/recording.json","size":105}
+{"digest":"sha256:d335438f9e1fe9e52543c73112e7d0c972b80226728581be3edd580c15152c92","path":"case-b/trace.json","size":276}
