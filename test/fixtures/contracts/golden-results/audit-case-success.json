@@ -1,1 +1,1 @@
-{"byAxis":{"observe":1},"byFailure":{"loud-later":1},"confidence":"uncalibrated-ordering-only","crosscheck":[],"findings":[{"axis":"observe","consequence":"DOM 选择器一失效就没有回退，且失败原因指不到点上","evidence":"定位类步骤没有视觉模板","failure":"loud-later","node":"step_0002","rule":"no_template"}],"hasRecording":true,"label":null,"name":"contract-clean","penalty":15,"score":85,"steps":3}
+{"byAxis":{},"byFailure":{},"confidence":"uncalibrated-ordering-only","crosscheck":[],"findings":[],"hasRecording":true,"label":null,"name":"contract-clean","penalty":0,"score":100,"steps":3}
