@@ -212,3 +212,22 @@ python3 -m trust.phoenix_preflight   # if you touch Phoenix wiring
 
 Do not claim an evaluator works from an example output alone. The failure mode being guarded
 must be exercised, and any new rule needs both a trace it flags and one it lets through.
+
+## v2 Experiment 架构（trace_eval 包）
+
+本 skill 的确定性审计已纳入 v2 五层正确性框架
+（C1 结构 ∧ C2 执行 ∧ C3 业务 Oracle ∧ C4 Golden 可信 ∧ C5 稳定性；
+缺证据的层返回 `inconclusive`，不得自动按通过处理）。v2 命令与 Gate 退出码
+见 README 的「trace-evals/v2」一节：
+
+```bash
+python3 -m trace_eval.datasets validate <snapshot>
+python3 -m trace_eval.runner run <snapshot> --trials 2
+python3 -m trace_eval.aggregate compare <baseline> <candidate>
+python3 -m trace_eval.gates check <experiment> [--baseline <dir>]
+bash ci/smoke.sh   # CI：固定 Dataset + Gate 的重复发布判断
+```
+
+旧 CLI 处于兼容期：核心结果与 Round 0 基线逐字节一致
+（`test/test_e2e_smoke.py::test_old_cli_core_results_match_round0_baseline` 锁定）；
+弃用条件见 README。

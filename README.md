@@ -7,6 +7,33 @@
 
 它们必须分别报告：一次回放满分，不代表作为参照物的 golden 轨迹有足够证据力。
 
+## trace-evals/v2（Experiment 架构）
+
+新协议层已迁入 `trace_eval/` 包（Strangler 模式：旧 `trust/` CLI 在兼容期并行，
+不重写）。五层正确性判定：C1 结构 ∧ C2 执行 ∧ C3 业务 Oracle ∧ C4 Golden 可信
+∧ C5 稳定性；缺证据的层返回 `inconclusive`，不得自动按通过处理。
+
+```bash
+# 1) 版本化 Dataset 验证 / 快照
+python3 -m trace_eval.datasets validate <snapshot-dir>
+python3 -m trace_eval.datasets snapshot <dataset-dir> --out <store>
+# 2) 执行 Experiment（回放 + Oracle + 重复 Trial + 状态策略 + 稳定性）
+python3 -m trace_eval.runner run <snapshot-dir> --trials 2
+# 3) 聚合与 Baseline/Candidate 比较（新增失败 / 修复 / 漂移 / 无效 分列）
+python3 -m trace_eval.aggregate aggregate <experiment-dir>
+python3 -m trace_eval.aggregate compare <baseline-dir> <candidate-dir>
+# 4) CI Gate（稳定退出码：0 放行 / 1 阻断 / 2 配置或基础设施错误）
+python3 -m trace_eval.gates check <experiment-dir> [--baseline <dir>] [--policy <policy.json>]
+# CI：固定 Dataset + Gate 的重复、可解释发布判断
+bash ci/smoke.sh
+```
+
+**旧 CLI 兼容期与弃用条件**：`trust/` 的旧 CLI（`audit.py`、`maa_execution` 等）
+在兼容期内保持可用，核心结果与 Round 0 基线逐字节一致（由
+`test/fixtures/contracts/golden-results/` 冻结 + `test/test_e2e_smoke.py`
+的基线对拍锁定）。弃用条件：v2 Gate 连续两个发布周期稳定阻断、且
+Baseline 比较（`trace_eval.aggregate compare`）无回归后，旧 CLI 方可标记弃用。
+
 ## Golden 轨迹可信度体检
 
 ```bash

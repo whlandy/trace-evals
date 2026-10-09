@@ -152,6 +152,7 @@ def aggregate_experiment(experiment_dir: Path) -> dict:
             "scores": entry["scores"],
             "failureCodes": entry["failure_codes"],
             "runIds": [r["run_id"] for r in entry["runs"]],
+            "statuses": [r["status"] for r in entry["runs"]],
             "trials": len(entry["trial_verdicts"]),
             "executor": entry["executor"],
             "tags": entry["tags"],
