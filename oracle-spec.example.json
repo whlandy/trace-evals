@@ -1,0 +1,24 @@
+{
+  "schema": "trace-eval.oracle-spec/v3",
+  "flow": {
+    "optionalNodeIds": ["step_0001"],
+    "allowedExtraActions": ["DoNothing"],
+    "orderConstraints": [
+      {"before": "step_0002", "after": "step_0003"}
+    ],
+    "maxExtraSteps": 0,
+    "maxTotalRetries": 1,
+    "maxDurationMs": 15000
+  },
+  "nodes": {
+    "step_0003": {
+      "persistence": {
+        "method": "reload",
+        "expected": {
+          "enabled": true
+        },
+        "maxDelayMs": 5000
+      }
+    }
+  }
+}
