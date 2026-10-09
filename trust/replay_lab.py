@@ -39,6 +39,7 @@ from auth_setup import export_state, login                     # noqa: E402
 from chrome_path import resolve_chrome                         # noqa: E402
 from rec_config import load_config, with_defaults              # noqa: E402
 from replay_trace import evaluate_trace, load_trace, replay_trace  # noqa: E402
+from trust.observations import observations_from_execution     # noqa: E402
 
 # 会话失效的痕迹。replay_trace 会在第一步就把它认出来（_assert_landed），
 # 我们据此把这一遍标成 invalid 而不是红 —— 否则每条轨迹都会被冤枉。
@@ -61,6 +62,7 @@ def _run_once(page, case: Path, timeout_ms: int) -> dict:
         "error": error[:160],
         "invalid": any(mark in error for mark in AUTH_MARKS),
         "durationS": round(time.time() - started, 1),
+        "observations": observations_from_execution(golden, execution),
     }
 
 
